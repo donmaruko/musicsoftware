@@ -3,11 +3,14 @@
 #include <QMainWindow>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QWidget>
 #include <QTimer>
 #include <QFont>
 #include <QString>
 #include <QMutex>
+#include <QComboBox>
+#include <QGroupBox>
 #include <RtMidi.h>
 #include <memory>
 #include <string>
@@ -26,11 +29,15 @@ public:
 private slots:
     void clearDisplay();
     void processPendingMidiMessages();
+    void onKeySignatureChanged();
 
 private:
     // GUI components
     QWidget *centralWidget;
-    QVBoxLayout *layout;
+    QVBoxLayout *mainLayout;
+    QHBoxLayout *controlsLayout;
+    QGroupBox *keySelectionGroup;
+    QComboBox *keySignatureCombo;
     QLabel *deviceLabel;
     QLabel *noteLabel;
     QLabel *chordLabel;
@@ -48,6 +55,18 @@ private:
     std::vector<MidiMessage> midiMessageQueue;
     QMutex midiQueueMutex;
     
+    // Key signature and music theory
+    struct KeySignature {
+        std::string name;
+        std::vector<int> sharps;  // MIDI note numbers that should be sharp
+        std::vector<int> flats;   // MIDI note numbers that should be flat
+        int tonic;                // Root note of the key (0-11)
+        bool isMajor;
+    };
+    
+    std::vector<KeySignature> keySignatures;
+    int currentKeyIndex;
+    
     // Chord detection
     std::set<int> activeNotes;
     std::map<std::string, std::vector<int>> chordPatterns;
@@ -56,8 +75,10 @@ private:
     void setupUI();
     void setupMidi();
     void setupChordPatterns();
+    void setupKeySignatures();
     void connectToFirstMidiDevice();
     QString midiNoteToNoteName(int midiNote);
+    QString midiNoteToNoteNameInKey(int midiNote, const KeySignature& key);
     QString detectChord();
     std::string getChordName(const std::vector<int>& intervals, const std::string& rootNote);
     
