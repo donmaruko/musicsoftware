@@ -233,3 +233,6 @@ make -j$(nproc)  # Parallel build
 MIT License - Open source for educational and commercial use.
 
 ---
+
+addition to choose a key signature and therefore all the chords i play will show the relevant ones (ENHARMONIC CHORDS)
+add basic sound font

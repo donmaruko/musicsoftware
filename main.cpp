@@ -6,7 +6,7 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     
-    std::cout << "Starting MIDI Keyboard Monitor..." << std::endl;
+    std::cout << "Starting Keyboard Monitor..." << std::endl;
     
     MidiKeyboardMonitor window;
     window.show();

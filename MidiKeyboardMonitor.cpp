@@ -92,7 +92,7 @@ void MidiKeyboardMonitor::setupKeySignatures()
 
 void MidiKeyboardMonitor::setupUI()
 {
-    setWindowTitle("MIDI Keyboard Monitor - Key-Aware Analysis");
+    setWindowTitle("MIDI Keyboard Monitor");
     setMinimumSize(650, 500);
     resize(850, 600);
     
@@ -136,7 +136,7 @@ void MidiKeyboardMonitor::setupUI()
     mainLayout->addStretch(1);
     
     // Note display label
-    noteLabel = new QLabel("Connect MIDI controller...", this);
+    noteLabel = new QLabel("Connect MIDI Controller", this);
     noteLabel->setAlignment(Qt::AlignCenter);
     
     QFont noteFont;
@@ -242,7 +242,7 @@ void MidiKeyboardMonitor::attemptMidiConnection()
             midiConnected = false;
             deviceLabel->setText("No Controller Found");
             deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; font-weight: bold; }");
-            noteLabel->setText("Connect MIDI controller...");
+            noteLabel->setText("Connect MIDI controller");
             noteLabel->setStyleSheet("QLabel { color: #888; margin: 15px; }");
             return;
         }
@@ -291,7 +291,7 @@ void MidiKeyboardMonitor::attemptMidiConnection()
         deviceLabel->setText(deviceText);
         deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: green; margin-bottom: 10px; font-weight: bold; }");
         
-        noteLabel->setText("Press keys...");
+        noteLabel->setText("Press keys");
         noteLabel->setStyleSheet("QLabel { color: #2E8B57; margin: 15px; }");
         
         std::cout << "Successfully connected to: " << bestDeviceName << " (Port " << targetPort << ")" << std::endl;
@@ -316,7 +316,7 @@ void MidiKeyboardMonitor::disconnectMidi()
         deviceLabel->setText("No Controller Found");
         deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; font-weight: bold; }");
         
-        noteLabel->setText("Connect MIDI controller...");
+        noteLabel->setText("Connect MIDI controller");
         noteLabel->setStyleSheet("QLabel { color: #888; margin: 15px; }");
         
         chordLabel->setText("");
@@ -426,7 +426,7 @@ void MidiKeyboardMonitor::processPendingMidiMessages()
 
 void MidiKeyboardMonitor::clearDisplay()
 {
-    noteLabel->setText("Press keys...");
+    noteLabel->setText("Press keys");
     noteLabel->setStyleSheet("QLabel { color: #2E8B57; margin: 15px; }");
     chordLabel->setText("");
 }
