@@ -1,5 +1,0 @@
-/home/don/code/midi_input/build/CMakeFiles/midi-monitor.dir
-/home/don/code/midi_input/build/CMakeFiles/edit_cache.dir
-/home/don/code/midi_input/build/CMakeFiles/rebuild_cache.dir
-/home/don/code/midi_input/build/CMakeFiles/midi-monitor_autogen_timestamp_deps.dir
-/home/don/code/midi_input/build/CMakeFiles/midi-monitor_autogen.dir
