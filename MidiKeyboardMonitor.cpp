@@ -2,6 +2,8 @@
 #include <QApplication>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QCheckBox>
+#include <QRegularExpression>
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -18,8 +20,10 @@ MidiKeyboardMonitor::MidiKeyboardMonitor(QWidget *parent)
     , chordLabel(nullptr)
     , clearTimer(new QTimer(this))
     , midiProcessTimer(new QTimer(this))
+    , deviceCheckTimer(new QTimer(this))
     , midiIn(nullptr)
-    , currentKeyIndex(0)  // Default to C Major
+    , midiConnected(false)
+    , currentKeyIndex(0)
 {
     setupKeySignatures();
     setupUI();
@@ -29,28 +33,28 @@ MidiKeyboardMonitor::MidiKeyboardMonitor(QWidget *parent)
     // Connect timers and controls
     connect(clearTimer, &QTimer::timeout, this, &MidiKeyboardMonitor::clearDisplay);
     connect(midiProcessTimer, &QTimer::timeout, this, &MidiKeyboardMonitor::processPendingMidiMessages);
+    connect(deviceCheckTimer, &QTimer::timeout, this, &MidiKeyboardMonitor::checkForMidiDevices);
     connect(keySignatureCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MidiKeyboardMonitor::onKeySignatureChanged);
     
     clearTimer->setSingleShot(true);
     midiProcessTimer->start(10);
+    deviceCheckTimer->start(1000); // Check for devices every second
+    
+    // Initial device check
+    checkForMidiDevices();
 }
 
 MidiKeyboardMonitor::~MidiKeyboardMonitor()
 {
-    if (midiIn && midiIn->isPortOpen()) {
-        midiIn->closePort();
-    }
+    disconnectMidi();
 }
 
 void MidiKeyboardMonitor::setupKeySignatures()
 {
     // Major keys (following circle of fifths)
     keySignatures = {
-        // C Major (no accidentals)
         {"C Major", {}, {}, 0, true},
-        
-        // Sharp keys
         {"G Major", {6}, {}, 7, true},        // F#
         {"D Major", {6, 1}, {}, 2, true},     // F#, C#
         {"A Major", {6, 1, 8}, {}, 9, true},  // F#, C#, G#
@@ -59,16 +63,14 @@ void MidiKeyboardMonitor::setupKeySignatures()
         {"F# Major", {6, 1, 8, 3, 10, 5}, {}, 6, true}, // F#, C#, G#, D#, A#, E#
         {"C# Major", {0, 6, 1, 8, 3, 10, 5}, {}, 1, true}, // All sharps
         
-        // Flat keys
         {"F Major", {}, {10}, 5, true},       // Bb
-        {"Bb Major", {}, {10, 3}, 10, true},  // Bb, Eb
-        {"Eb Major", {}, {10, 3, 8}, 3, true}, // Bb, Eb, Ab
-        {"Ab Major", {}, {10, 3, 8, 1}, 8, true}, // Bb, Eb, Ab, Db
-        {"Db Major", {}, {10, 3, 8, 1, 6}, 1, true}, // Bb, Eb, Ab, Db, Gb
-        {"Gb Major", {}, {10, 3, 8, 1, 6, 11}, 6, true}, // Bb, Eb, Ab, Db, Gb, Cb
-        {"Cb Major", {}, {0, 10, 3, 8, 1, 6, 11}, 11, true}, // All flats
+        {"B♭ Major", {}, {10, 3}, 10, true},  // Bb, Eb
+        {"E♭ Major", {}, {10, 3, 8}, 3, true}, // Bb, Eb, Ab
+        {"A♭ Major", {}, {10, 3, 8, 1}, 8, true}, // Bb, Eb, Ab, Db
+        {"D♭ Major", {}, {10, 3, 8, 1, 6}, 1, true}, // Bb, Eb, Ab, Db, Gb
+        {"G♭ Major", {}, {10, 3, 8, 1, 6, 11}, 6, true}, // Bb, Eb, Ab, Db, Gb, Cb
+        {"C♭ Major", {}, {0, 10, 3, 8, 1, 6, 11}, 11, true}, // All flats
         
-        // Natural minor keys
         {"A minor", {}, {}, 9, false},
         {"E minor", {6}, {}, 4, false},       // F#
         {"B minor", {6, 1}, {}, 11, false},   // F#, C#
@@ -82,17 +84,17 @@ void MidiKeyboardMonitor::setupKeySignatures()
         {"G minor", {}, {10, 3}, 7, false},   // Bb, Eb
         {"C minor", {}, {10, 3, 8}, 0, false}, // Bb, Eb, Ab
         {"F minor", {}, {10, 3, 8, 1}, 5, false}, // Bb, Eb, Ab, Db
-        {"Bb minor", {}, {10, 3, 8, 1, 6}, 10, false}, // Bb, Eb, Ab, Db, Gb
-        {"Eb minor", {}, {10, 3, 8, 1, 6, 11}, 3, false}, // Bb, Eb, Ab, Db, Gb, Cb
-        {"Ab minor", {}, {0, 10, 3, 8, 1, 6, 11}, 8, false}, // All flats
+        {"B♭ minor", {}, {10, 3, 8, 1, 6}, 10, false}, // Bb, Eb, Ab, Db, Gb
+        {"E♭ minor", {}, {10, 3, 8, 1, 6, 11}, 3, false}, // Bb, Eb, Ab, Db, Gb, Cb
+        {"A♭ minor", {}, {0, 10, 3, 8, 1, 6, 11}, 8, false}, // All flats
     };
 }
 
 void MidiKeyboardMonitor::setupUI()
 {
-    setWindowTitle("MIDI Keyboard Monitor");
-    setMinimumSize(600, 500);
-    resize(800, 600);
+    setWindowTitle("MIDI Keyboard Monitor - Key-Aware Analysis");
+    setMinimumSize(650, 500);
+    resize(850, 600);
     
     centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
@@ -100,8 +102,8 @@ void MidiKeyboardMonitor::setupUI()
     mainLayout = new QVBoxLayout(centralWidget);
     mainLayout->setSpacing(15);
     
-    // Key signature selection controls
-    keySelectionGroup = new QGroupBox("Key Signature", this);
+    // Control panel
+    keySelectionGroup = new QGroupBox("Settings", this);
     keySelectionGroup->setStyleSheet(
         "QGroupBox { font-weight: bold; font-size: 14px; padding: 10px; }"
         "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
@@ -109,6 +111,7 @@ void MidiKeyboardMonitor::setupUI()
     
     controlsLayout = new QHBoxLayout(keySelectionGroup);
     
+    // Key signature selection
     keySignatureCombo = new QComboBox(this);
     keySignatureCombo->setStyleSheet(
         "QComboBox { font-size: 13px; padding: 5px; min-width: 150px; }"
@@ -117,31 +120,30 @@ void MidiKeyboardMonitor::setupUI()
     for (const auto& key : keySignatures) {
         keySignatureCombo->addItem(QString::fromStdString(key.name));
     }
-    keySignatureCombo->setCurrentIndex(0); // Default to C Major
+    keySignatureCombo->setCurrentIndex(0);
     
     controlsLayout->addWidget(keySignatureCombo);
     controlsLayout->addStretch();
     
     mainLayout->addWidget(keySelectionGroup);
     
-    // Device connection label
-    deviceLabel = new QLabel("No MIDI device connected", this);
+    // Device status label
+    deviceLabel = new QLabel("No Controller Found", this);
     deviceLabel->setAlignment(Qt::AlignCenter);
-    deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: #666; margin-bottom: 10px; }");
+    deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; font-weight: bold; }");
     mainLayout->addWidget(deviceLabel);
     
-    // Add spacer to center the note/chord display
     mainLayout->addStretch(1);
     
     // Note display label
-    noteLabel = new QLabel("Press keys...", this);
+    noteLabel = new QLabel("Connect MIDI controller...", this);
     noteLabel->setAlignment(Qt::AlignCenter);
     
     QFont noteFont;
     noteFont.setPointSize(36);
     noteFont.setBold(true);
     noteLabel->setFont(noteFont);
-    noteLabel->setStyleSheet("QLabel { color: #2E8B57; margin: 15px; }");
+    noteLabel->setStyleSheet("QLabel { color: #888; margin: 15px; }");
     
     mainLayout->addWidget(noteLabel);
     
@@ -157,7 +159,6 @@ void MidiKeyboardMonitor::setupUI()
     
     mainLayout->addWidget(chordLabel);
     
-    // Add bottom spacer
     mainLayout->addStretch(1);
     
     setStyleSheet("QMainWindow { background-color: white; }");
@@ -168,8 +169,7 @@ void MidiKeyboardMonitor::onKeySignatureChanged()
     currentKeyIndex = keySignatureCombo->currentIndex();
     std::cout << "Key signature changed to: " << keySignatures[currentKeyIndex].name << std::endl;
     
-    // Update display with current notes using new key signature
-    if (!activeNotes.empty()) {
+    if (!activeNotes.empty() && midiConnected) {
         QString notesList;
         for (int note : activeNotes) {
             if (!notesList.isEmpty()) notesList += " + ";
@@ -177,117 +177,191 @@ void MidiKeyboardMonitor::onKeySignatureChanged()
         }
         noteLabel->setText(notesList);
         
-        // Re-analyze chord with new key context
         QString chord = detectChord();
         chordLabel->setText(chord);
     }
 }
 
-void MidiKeyboardMonitor::setupChordPatterns()
+void MidiKeyboardMonitor::checkForMidiDevices()
 {
-    // Major chords and extensions
-    chordPatterns["maj"] = {0, 4, 7};
-    chordPatterns["maj7"] = {0, 4, 7, 11};
-    chordPatterns["maj9"] = {0, 4, 7, 11, 14};
-    chordPatterns["6"] = {0, 4, 7, 9};
-    chordPatterns["add9"] = {0, 4, 7, 14};
-    
-    // Minor chords and extensions
-    chordPatterns["m"] = {0, 3, 7};
-    chordPatterns["m7"] = {0, 3, 7, 10};
-    chordPatterns["m9"] = {0, 3, 7, 10, 14};
-    chordPatterns["m6"] = {0, 3, 7, 9};
-    chordPatterns["mMaj7"] = {0, 3, 7, 11};
-    
-    // Dominant chords
-    chordPatterns["7"] = {0, 4, 7, 10};
-    chordPatterns["9"] = {0, 4, 7, 10, 14};
-    chordPatterns["11"] = {0, 4, 7, 10, 14, 17};
-    chordPatterns["13"] = {0, 4, 7, 10, 14, 17, 21};
-    
-    // Diminished chords
-    chordPatterns["dim"] = {0, 3, 6};
-    chordPatterns["dim7"] = {0, 3, 6, 9};
-    chordPatterns["ø7"] = {0, 3, 6, 10}; // Half-diminished
-    
-    // Augmented chords
-    chordPatterns["aug"] = {0, 4, 8};
-    chordPatterns["aug7"] = {0, 4, 8, 10};
-    
-    // Suspended chords
-    chordPatterns["sus2"] = {0, 2, 7};
-    chordPatterns["sus4"] = {0, 5, 7};
-    chordPatterns["7sus2"] = {0, 2, 7, 10};
-    chordPatterns["7sus4"] = {0, 5, 7, 10};
-    
-    // Altered dominants
-    chordPatterns["7♭5"] = {0, 4, 6, 10};
-    chordPatterns["7♯5"] = {0, 4, 8, 10};
-    chordPatterns["7♭9"] = {0, 4, 7, 10, 13};
-    chordPatterns["7♯9"] = {0, 4, 7, 10, 15};
-    chordPatterns["7♯11"] = {0, 4, 7, 10, 18};
+    try {
+        // Create temporary MIDI input to check available ports
+        std::unique_ptr<RtMidiIn> tempMidiIn = std::make_unique<RtMidiIn>();
+        unsigned int nPorts = tempMidiIn->getPortCount();
+        
+        bool deviceFound = false;
+        std::string foundDeviceName;
+        
+        // Check for any MIDI devices
+        for (unsigned int i = 0; i < nPorts; i++) {
+            std::string portName = tempMidiIn->getPortName(i);
+            // Skip "Midi Through" ports as they're not real devices
+            if (portName.find("Midi Through") == std::string::npos) {
+                deviceFound = true;
+                foundDeviceName = portName;
+                break;
+            }
+        }
+        
+        // Handle connection state changes
+        if (deviceFound && !midiConnected) {
+            std::cout << "MIDI device detected: " << foundDeviceName << std::endl;
+            attemptMidiConnection();
+        } else if (!deviceFound && midiConnected) {
+            std::cout << "MIDI device disconnected" << std::endl;
+            disconnectMidi();
+        }
+        
+    } catch (RtMidiError &error) {
+        std::cerr << "Error checking MIDI devices: " << error.getMessage() << std::endl;
+        if (midiConnected) {
+            disconnectMidi();
+        }
+    }
 }
 
 void MidiKeyboardMonitor::setupMidi()
 {
     try {
         midiIn = std::make_unique<RtMidiIn>();
-        
-        unsigned int nPorts = midiIn->getPortCount();
-        std::cout << "Available MIDI input ports: " << nPorts << std::endl;
-        
-        if (nPorts == 0) {
-            deviceLabel->setText("No MIDI input devices found!");
-            deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; }");
-            return;
-        }
-        
-        for (unsigned int i = 0; i < nPorts; i++) {
-            std::string portName = midiIn->getPortName(i);
-            std::cout << "Port " << i << ": " << portName << std::endl;
-        }
-        
-        connectToFirstMidiDevice();
-        
     } catch (RtMidiError &error) {
-        std::cerr << "RtMidi error: " << error.getMessage() << std::endl;
+        std::cerr << "RtMidi initialization error: " << error.getMessage() << std::endl;
         deviceLabel->setText("MIDI Error: " + QString::fromStdString(error.getMessage()));
-        deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; }");
+        deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; font-weight: bold; }");
     }
 }
 
-void MidiKeyboardMonitor::connectToFirstMidiDevice()
+void MidiKeyboardMonitor::attemptMidiConnection()
 {
+    if (!midiIn) return;
+    
     try {
-        if (midiIn->getPortCount() > 0) {
-            int targetPort = 0;
-            for (unsigned int i = 0; i < midiIn->getPortCount(); i++) {
-                std::string portName = midiIn->getPortName(i);
-                if (portName.find("Recital Play") != std::string::npos) {
-                    targetPort = i;
-                    break;
-                }
+        unsigned int nPorts = midiIn->getPortCount();
+        
+        if (nPorts == 0) {
+            midiConnected = false;
+            deviceLabel->setText("No Controller Found");
+            deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; font-weight: bold; }");
+            noteLabel->setText("Connect MIDI controller...");
+            noteLabel->setStyleSheet("QLabel { color: #888; margin: 15px; }");
+            return;
+        }
+        
+        // Find the best MIDI device (prefer actual keyboards over Midi Through)
+        int targetPort = -1;
+        std::string bestDeviceName;
+        
+        for (unsigned int i = 0; i < nPorts; i++) {
+            std::string portName = midiIn->getPortName(i);
+            
+            // Prefer specific devices we know about
+            if (portName.find("Recital Play") != std::string::npos ||
+                portName.find("Keyboard") != std::string::npos ||
+                portName.find("Piano") != std::string::npos) {
+                targetPort = i;
+                bestDeviceName = portName;
+                break;
             }
             
-            std::string portName = midiIn->getPortName(targetPort);
-            midiIn->openPort(targetPort);
-            
-            midiIn->setCallback(&MidiKeyboardMonitor::midiCallback, this);
-            midiIn->ignoreTypes(false, false, false);
-            
-            QString deviceText = QString("Connected to: %1 (Port %2)")
-                                .arg(QString::fromStdString(portName))
-                                .arg(targetPort);
-            deviceLabel->setText(deviceText);
-            deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: green; margin-bottom: 10px; }");
-            
-            std::cout << "Successfully connected to: " << portName << " (Port " << targetPort << ")" << std::endl;
+            // Skip Midi Through ports
+            if (portName.find("Midi Through") == std::string::npos && targetPort == -1) {
+                targetPort = i;
+                bestDeviceName = portName;
+            }
         }
+        
+        if (targetPort == -1) {
+            midiConnected = false;
+            return;
+        }
+        
+        // Connect to the selected device
+        if (midiIn->isPortOpen()) {
+            midiIn->closePort();
+        }
+        
+        midiIn->openPort(targetPort);
+        midiIn->setCallback(&MidiKeyboardMonitor::midiCallback, this);
+        midiIn->ignoreTypes(false, false, false);
+        
+        midiConnected = true;
+        lastConnectedDevice = bestDeviceName;
+        
+        QString deviceText = QString("Connected: %1").arg(QString::fromStdString(bestDeviceName));
+        deviceLabel->setText(deviceText);
+        deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: green; margin-bottom: 10px; font-weight: bold; }");
+        
+        noteLabel->setText("Press keys...");
+        noteLabel->setStyleSheet("QLabel { color: #2E8B57; margin: 15px; }");
+        
+        std::cout << "Successfully connected to: " << bestDeviceName << " (Port " << targetPort << ")" << std::endl;
+        
     } catch (RtMidiError &error) {
         std::cerr << "Error connecting to MIDI device: " << error.getMessage() << std::endl;
-        deviceLabel->setText("Connection Error: " + QString::fromStdString(error.getMessage()));
-        deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; }");
+        midiConnected = false;
+        deviceLabel->setText("Connection Error");
+        deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; font-weight: bold; }");
     }
+}
+
+void MidiKeyboardMonitor::disconnectMidi()
+{
+    try {
+        if (midiIn && midiIn->isPortOpen()) {
+            midiIn->closePort();
+        }
+        midiConnected = false;
+        activeNotes.clear();
+        
+        deviceLabel->setText("No Controller Found");
+        deviceLabel->setStyleSheet("QLabel { font-size: 14px; color: red; margin-bottom: 10px; font-weight: bold; }");
+        
+        noteLabel->setText("Connect MIDI controller...");
+        noteLabel->setStyleSheet("QLabel { color: #888; margin: 15px; }");
+        
+        chordLabel->setText("");
+        
+    } catch (RtMidiError &error) {
+        std::cerr << "Error disconnecting MIDI: " << error.getMessage() << std::endl;
+    }
+}
+
+void MidiKeyboardMonitor::setupChordPatterns()
+{
+    chordPatterns["maj"] = {0, 4, 7};
+    chordPatterns["maj7"] = {0, 4, 7, 11};
+    chordPatterns["maj9"] = {0, 4, 7, 11, 14};
+    chordPatterns["6"] = {0, 4, 7, 9};
+    chordPatterns["add9"] = {0, 4, 7, 14};
+    
+    chordPatterns["m"] = {0, 3, 7};
+    chordPatterns["m7"] = {0, 3, 7, 10};
+    chordPatterns["m9"] = {0, 3, 7, 10, 14};
+    chordPatterns["m6"] = {0, 3, 7, 9};
+    chordPatterns["mMaj7"] = {0, 3, 7, 11};
+    
+    chordPatterns["7"] = {0, 4, 7, 10};
+    chordPatterns["9"] = {0, 4, 7, 10, 14};
+    chordPatterns["11"] = {0, 4, 7, 10, 14, 17};
+    chordPatterns["13"] = {0, 4, 7, 10, 14, 17, 21};
+    
+    chordPatterns["dim"] = {0, 3, 6};
+    chordPatterns["dim7"] = {0, 3, 6, 9};
+    chordPatterns["ø7"] = {0, 3, 6, 10};
+    
+    chordPatterns["aug"] = {0, 4, 8};
+    chordPatterns["aug7"] = {0, 4, 8, 10};
+    
+    chordPatterns["sus2"] = {0, 2, 7};
+    chordPatterns["sus4"] = {0, 5, 7};
+    chordPatterns["7sus2"] = {0, 2, 7, 10};
+    chordPatterns["7sus4"] = {0, 5, 7, 10};
+    
+    chordPatterns["7♭­5"] = {0, 4, 6, 10};
+    chordPatterns["7#5"] = {0, 4, 8, 10};
+    chordPatterns["7♭9"] = {0, 4, 7, 10, 13};
+    chordPatterns["7#9"] = {0, 4, 7, 10, 15};
+    chordPatterns["7#11"] = {0, 4, 7, 10, 18};
 }
 
 void MidiKeyboardMonitor::midiCallback(double timeStamp, std::vector<unsigned char> *message, void *userData)
@@ -300,6 +374,8 @@ void MidiKeyboardMonitor::midiCallback(double timeStamp, std::vector<unsigned ch
 
 void MidiKeyboardMonitor::processPendingMidiMessages()
 {
+    if (!midiConnected) return;
+    
     std::vector<MidiMessage> messages;
     
     {
@@ -310,12 +386,6 @@ void MidiKeyboardMonitor::processPendingMidiMessages()
     
     for (const auto& msg : messages) {
         if (msg.data.size() == 0) continue;
-        
-        std::cout << "MIDI message: ";
-        for (size_t i = 0; i < msg.data.size(); i++) {
-            std::cout << std::hex << (int)msg.data[i] << " ";
-        }
-        std::cout << std::dec << std::endl;
         
         if (msg.data.size() >= 3) {
             unsigned char status = msg.data[0];
@@ -329,16 +399,11 @@ void MidiKeyboardMonitor::processPendingMidiMessages()
             
             if (isNoteOn) {
                 activeNotes.insert(noteNumber);
-                std::cout << "Note ON: " << midiNoteToNoteNameInKey(noteNumber, currentKey).toStdString() 
-                         << " (MIDI: " << (int)noteNumber << ", Velocity: " << (int)velocity << ")" << std::endl;
             }
             else if (isNoteOff) {
                 activeNotes.erase(noteNumber);
-                std::cout << "Note OFF: " << midiNoteToNoteNameInKey(noteNumber, currentKey).toStdString() 
-                         << " (MIDI: " << (int)noteNumber << ")" << std::endl;
             }
             
-            // Update display using key-aware note names
             if (!activeNotes.empty()) {
                 QString notesList;
                 for (int note : activeNotes) {
@@ -346,6 +411,7 @@ void MidiKeyboardMonitor::processPendingMidiMessages()
                     notesList += midiNoteToNoteNameInKey(note, currentKey);
                 }
                 noteLabel->setText(notesList);
+                noteLabel->setStyleSheet("QLabel { color: #2E8B57; margin: 15px; }");
                 
                 QString chord = detectChord();
                 chordLabel->setText(chord);
@@ -361,53 +427,8 @@ void MidiKeyboardMonitor::processPendingMidiMessages()
 void MidiKeyboardMonitor::clearDisplay()
 {
     noteLabel->setText("Press keys...");
+    noteLabel->setStyleSheet("QLabel { color: #2E8B57; margin: 15px; }");
     chordLabel->setText("");
-}
-
-QString MidiKeyboardMonitor::midiNoteToNoteNameInKey(int midiNote, const KeySignature& key)
-{
-    const QString sharpNames[] = {"C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"};
-    const QString flatNames[] = {"C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"};
-    
-    int noteClass = midiNote % 12;
-    int octave = (midiNote / 12) - 1;
-    
-    QString noteName;
-    
-    // Check if this note should be sharp in the current key
-    for (int sharpNote : key.sharps) {
-        if (noteClass == sharpNote) {
-            noteName = sharpNames[noteClass];
-            break;
-        }
-    }
-    
-    // Check if this note should be flat in the current key  
-    if (noteName.isEmpty()) {
-        for (int flatNote : key.flats) {
-            if (noteClass == flatNote) {
-                noteName = flatNames[noteClass];
-                break;
-            }
-        }
-    }
-    
-    // If not specified by key signature, use default (prefer sharps for now)
-    if (noteName.isEmpty()) {
-        noteName = sharpNames[noteClass];
-    }
-    
-    return noteName + QString::number(octave);
-}
-
-QString MidiKeyboardMonitor::midiNoteToNoteName(int midiNote)
-{
-    const QString noteNames[] = {"C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"};
-    
-    int noteIndex = midiNote % 12;
-    int octave = (midiNote / 12) - 1;
-    
-    return noteNames[noteIndex] + QString::number(octave);
 }
 
 QString MidiKeyboardMonitor::detectChord()
@@ -482,4 +503,50 @@ std::string MidiKeyboardMonitor::getChordName(const std::vector<int>& intervals,
     }
     
     return "";
+}
+
+QString MidiKeyboardMonitor::midiNoteToNoteNameInKey(int midiNote, const KeySignature& key)
+{
+    const QString sharpNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    const QString flatNames[] = {"C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"};
+    
+    int noteClass = midiNote % 12;
+    int octave = (midiNote / 12) - 1;
+    
+    QString noteName;
+    
+    // Check if this note should be sharp in the current key
+    for (int sharpNote : key.sharps) {
+        if (noteClass == sharpNote) {
+            noteName = sharpNames[noteClass];
+            break;
+        }
+    }
+    
+    // Check if this note should be flat in the current key  
+    if (noteName.isEmpty()) {
+        for (int flatNote : key.flats) {
+            if (noteClass == flatNote) {
+                noteName = flatNames[noteClass];
+                break;
+            }
+        }
+    }
+    
+    // If not specified by key signature, use default (prefer sharps)
+    if (noteName.isEmpty()) {
+        noteName = sharpNames[noteClass];
+    }
+    
+    return noteName + QString::number(octave);
+}
+
+QString MidiKeyboardMonitor::midiNoteToNoteName(int midiNote)
+{
+    const QString noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    
+    int noteIndex = midiNote % 12;
+    int octave = (midiNote / 12) - 1;
+    
+    return noteNames[noteIndex] + QString::number(octave);
 }

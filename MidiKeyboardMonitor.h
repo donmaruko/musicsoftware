@@ -30,6 +30,7 @@ private slots:
     void clearDisplay();
     void processPendingMidiMessages();
     void onKeySignatureChanged();
+    void checkForMidiDevices();
 
 private:
     // GUI components
@@ -43,9 +44,12 @@ private:
     QLabel *chordLabel;
     QTimer *clearTimer;
     QTimer *midiProcessTimer;
+    QTimer *deviceCheckTimer;
     
     // MIDI components
     std::unique_ptr<RtMidiIn> midiIn;
+    bool midiConnected;
+    std::string lastConnectedDevice;
     
     // Thread-safe MIDI message queue
     struct MidiMessage {
@@ -76,7 +80,8 @@ private:
     void setupMidi();
     void setupChordPatterns();
     void setupKeySignatures();
-    void connectToFirstMidiDevice();
+    void attemptMidiConnection();
+    void disconnectMidi();
     QString midiNoteToNoteName(int midiNote);
     QString midiNoteToNoteNameInKey(int midiNote, const KeySignature& key);
     QString detectChord();
