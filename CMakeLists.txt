@@ -19,6 +19,15 @@ add_executable(midi-monitor
     main.cpp
     MidiKeyboardMonitor.cpp
     MidiKeyboardMonitor.h
+    MusicTypes.h
+    MusicTheoryEngine.cpp
+    MusicTheoryEngine.h
+    MidiManager.cpp
+    MidiManager.h
+    ChordAnalyzer.cpp
+    ChordAnalyzer.h
+    UIManager.cpp
+    UIManager.h
 )
 
 # Link libraries
