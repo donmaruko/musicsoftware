@@ -72,7 +72,7 @@ private:
     QGroupBox* midiLogGroup;
     QTextEdit* midiLogDisplay;
     std::deque<QString> midiLogEntries;
-    static const int MAX_LOG_ENTRIES = 10;
+    static const int MAX_LOG_ENTRIES = 50;  // Increased from 10 to fill more space
     
     // Timer for clearing displays
     QTimer* clearTimer;

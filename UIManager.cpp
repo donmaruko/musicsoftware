@@ -34,29 +34,31 @@ void UIManager::setupUI() {
     centralWidget = new QWidget(mainWindow);
     mainWindow->setCentralWidget(centralWidget);
     
-    // Main horizontal layout
+    // Main horizontal layout with tighter spacing
     mainHorizontalLayout = new QHBoxLayout(centralWidget);
-    mainHorizontalLayout->setSpacing(10);
+    mainHorizontalLayout->setSpacing(5);  // Reduced spacing
+    mainHorizontalLayout->setContentsMargins(5, 5, 5, 5);  // Tighter margins
     
     setupLeftPanel();
     setupRightPanel();
     
     // Add panels to main layout
-    mainHorizontalLayout->addWidget(leftPanel);
-    mainHorizontalLayout->addWidget(rightPanel);
+    mainHorizontalLayout->addWidget(leftPanel, 0);  // Don't stretch left panel
+    mainHorizontalLayout->addWidget(rightPanel, 1); // Let right panel take remaining space
     
     mainWindow->setStyleSheet("QMainWindow { background-color: white; }");
 }
 
 void UIManager::setupLeftPanel() {
-    // Left panel for MIDI log (30% of width)
+    // Left panel for MIDI log - make it narrower and more efficient
     leftPanel = new QWidget(mainWindow);
-    leftPanel->setMaximumWidth(280);
-    leftPanel->setMinimumWidth(220);
+    leftPanel->setMaximumWidth(200);  // Reduced from 280
+    leftPanel->setMinimumWidth(180);  // Reduced from 220
     leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->setContentsMargins(5, 5, 5, 5);  // Tighter margins
     
     setupMidiLog();
-    leftLayout->addStretch();
+    // Remove the stretch to let log take full height
 }
 
 void UIManager::setupRightPanel() {
@@ -146,22 +148,42 @@ void UIManager::setupMidiLog() {
     // MIDI Log Group
     midiLogGroup = new QGroupBox("MIDI Log", leftPanel);
     midiLogGroup->setStyleSheet(
-        "QGroupBox { font-weight: bold; font-size: 14px; padding: 10px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
+        "QGroupBox { "
+        "font-weight: bold; "
+        "font-size: 12px; "
+        "padding: 5px; "
+        "margin-top: 10px; "
+        "} "
+        "QGroupBox::title { "
+        "subcontrol-origin: margin; "
+        "left: 8px; "
+        "padding: 0 5px 0 5px; "
+        "}"
     );
     
     QVBoxLayout* logLayout = new QVBoxLayout(midiLogGroup);
+    logLayout->setContentsMargins(3, 15, 3, 3);  // Even tighter margins
+    logLayout->setSpacing(0);
     
-    // MIDI log display
+    // MIDI log display - optimize for maximum content
     midiLogDisplay = new QTextEdit(midiLogGroup);
     midiLogDisplay->setReadOnly(true);
-    midiLogDisplay->setMaximumHeight(400);
+    midiLogDisplay->setMinimumHeight(200);
+    
+    // Ensure text fills the widget properly
+    midiLogDisplay->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    midiLogDisplay->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    midiLogDisplay->setWordWrapMode(QTextOption::NoWrap);  // Don't wrap to see full note names
+    
     midiLogDisplay->setStyleSheet(
         "QTextEdit { "
         "font-family: 'Courier New', monospace; "
-        "font-size: 12px; "
+        "font-size: 10px; "  // Even smaller font for more entries
+        "line-height: 1.1; "  // Tighter line spacing
         "background-color: #f8f8f8; "
         "border: 1px solid #ccc; "
+        "padding: 2px; "     // Minimal padding
+        "margin: 0px; "      // No margins
         "}"
     );
     
