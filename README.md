@@ -2,11 +2,11 @@
 
 A real-time lightweight MIDI analysis application built with modern C++17, Qt6, and RtMidi. I created this project to practice multithreaded audio processing, signal processing, music theory implementation, and cross-platform GUI development.
 
-## 🎵 Overview
+## Overview
 
 This application accepts any MIDI-capable keyboard as input and provides note detection, chord recognition, and interval analysis with a responsive graphical interface. Built for musicians, music students, and developers interested in music technology.
 
-## ✨ Key Features
+## Key Features
 
 ### Real-Time MIDI Processing
 - **Low-latency MIDI input** with sub-10ms response time
@@ -45,7 +45,7 @@ The application recognizes over 25+ chord types including:
 - **Thread-safe UI updates** preventing GUI freezing
 - **Scalable design** supporting high-DPI displays
 
-## 🏗️ Technical Architecture
+## Technical Architecture
 
 ### Core Design Patterns
 
@@ -134,7 +134,7 @@ pkg_check_modules(RTMIDI REQUIRED rtmidi)
 set(CMAKE_AUTOMOC ON)
 ```
 
-## 🔧 Technical Implementation Details
+## Technical Implementation Details
 
 ### MIDI Message Processing Pipeline
 
@@ -185,7 +185,7 @@ bool matchesChordType(const std::vector<int>& intervals, const std::vector<int>&
 QTimer::timeout -> processPendingMidiMessages() -> emit signals -> GUI updates
 ```
 
-## 🎯 Use Cases
+## Use Cases
 
 - **Music Theory Learning:** Visual feedback for chord identification
 - **Piano Practice:** Real-time validation of chord progressions
@@ -193,7 +193,7 @@ QTimer::timeout -> processPendingMidiMessages() -> emit signals -> GUI updates
 - **Composition Aid:** Quick chord identification while writing
 - **MIDI Debugging:** Low-level MIDI message inspection
 
-## 🛠️ Development Environment
+## Development Environment
 
 ### Prerequisites
 ```bash
@@ -217,7 +217,7 @@ make -j$(nproc)  # Parallel build
 ./midi-monitor
 ```
 
-## 🔮 Future Enhancements
+## Future Enhancements
 
 ### Planned Features
 - **Audio input analysis** using FFT for microphone input
@@ -228,7 +228,7 @@ make -j$(nproc)  # Parallel build
 - **Web interface** using Qt WebAssembly
 - **Configuration system** for user preferences
 
-## 📝 License
+## License
 
 MIT License - Open source for educational and commercial use.
 
