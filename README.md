@@ -19,25 +19,7 @@ This application accepts any MIDI-capable keyboard as input and provides note de
 - **Interval analysis** from simple 2nds to complex compound intervals
 - **Polyphonic note tracking** with unlimited simultaneous notes
 - **Context-aware chord naming** with multiple enharmonic interpretations
-
-### Chord Detection Algorithm
-The application recognizes over 25+ chord types including:
-
-**Basic Triads & Extensions:**
-- Major, Minor, Diminished, Augmented
-- Major 7th, Minor 7th, Dominant 7th
-- Major 9th, Minor 9th, Dominant 9th, 11th, 13th
-
-**Jazz & Advanced Harmony:**
-- Suspended chords (sus2, sus4, 7sus2, 7sus4)
-- Altered dominants (7♭5, 7♯5, 7♭9, 7♯9, 7♯11)
-- Half-diminished, Diminished 7th
-- Add chords (add9, 6th chords)
-
-**Interval Recognition:**
-- All simple and compound intervals
-- Enharmonic equivalent handling
-- Contextual naming based on harmonic function
+- **Chord type recognition** with an array of triads, extensions, and intervals
 
 ### Modern GUI Architecture
 - **Responsive Qt6 interface** with custom styling
@@ -216,17 +198,6 @@ cmake ..
 make -j$(nproc)  # Parallel build
 ./midi-monitor
 ```
-
-## Future Enhancements
-
-### Planned Features
-- **Audio input analysis** using FFT for microphone input
-- **MIDI file playback** with real-time analysis
-- **Custom chord library** with user-defined patterns
-- **Multiple keyboard support** for ensemble analysis
-- **Plugin architecture** for extensible chord definitions
-- **Web interface** using Qt WebAssembly
-- **Configuration system** for user preferences
 
 ## License
 
